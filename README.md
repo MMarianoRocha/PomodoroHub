@@ -1,103 +1,155 @@
 # PomodoroHub
 
-## Overview
+A client-server application for managing team Pomodoro sessions.
 
-PomodoroHub is a FastAPI backend for managing Pomodoro sessions across multiple users.
-The desktop client is built with PySide6 and queries the backend to display a live overlay
-showing who is currently in an active Pomodoro session.
+The server runs on a single machine on the local network and clients connect via a desktop app.
 
-The project is designed to run the backend on one dedicated machine and the desktop client
-on multiple user PCs.
+---
 
-## Architecture
+## Key characteristics
 
-- `main.py` - server entrypoint that starts Uvicorn
-- `app/app.py` - FastAPI application with startup lifecycle and database initialization
-- `desktop_app.py` - desktop client UI with login, Pomodoro controls, and overlay
-- `build_windows.bat` - builds the Windows server and client executables
-- `run_server.bat` - starts the server from source on Windows
-- `run_client.bat` - starts the desktop app from source on Windows
-- `requirements.txt` - Python dependency list
+| Item | Detail |
+|---|---|
+| **Architecture** | 1 FastAPI server + N desktop clients (PySide6) |
+| **Communication** | HTTP REST over LAN — no internet required |
+| **Database** | Local SQLite on the server (`test.db`) |
+| **Authentication** | Username + password with bcrypt hashing (passlib 1.7.4 + bcrypt 4.0.1) |
+| **Overlay** | Floating draggable widget displayed on top of all windows |
+| **Distribution** | Desktop distributed as a self-contained `.exe` (PyInstaller) — no Python required on client machines |
+| **Python** | 3.14+ |
+| **OS** | Windows |
 
-## Installation
+---
 
-1. Create and activate a Python virtual environment:
+## Project structure
 
-```bat
-py -3 -m venv .venv
-.venv\Scripts\activate
+```
+main.py               # Server entrypoint (Uvicorn)
+desktop_app.py        # Desktop client entrypoint
+app/app.py            # FastAPI app + lifecycle + routers
+models/               # SQLAlchemy models (User, Pomodoro)
+routes/               # REST routes (users, pomodoro)
+schemas/              # Pydantic validation schemas
+services/             # Authentication logic (bcrypt)
+database/             # SQLAlchemy config + async session
+desktop/              # PySide6 UI, HTTP client, local session
+requirements-server.txt   # Server dependencies
+requirements-client.txt   # Client dependencies (PySide6 + PyInstaller)
+run_server.bat        # Starts the server from source
+run_client.bat        # Starts the desktop app from source
+build_windows.bat     # Builds the .exe files (server + client)
 ```
 
-2. Install dependencies:
+---
+
+## Prerequisites
+
+- Windows 10/11
+- Python 3.14+ installed and on PATH (`py --list` should show Python 3.14)
+- Access to the project folder (local or network share)
+
+---
+
+## Server setup
+
+### 1. Set the server IP
+
+Edit the two files below and replace `10.20.30.228` with the actual LAN IP of the machine that will run the server:
+
+**`desktop/ui.py`** and **`desktop/api_client.py`** — find the line:
+```python
+"http://10.20.30.228:8000"
+```
+and replace it with the correct IP.
+
+After changing it, [rebuild the executables](#building-the-executables).
+
+### 2. Start the server
+
+On the server machine, run as the service user:
 
 ```bat
-pip install -r requirements.txt
+run_server.bat
 ```
 
-## Building the Windows executables
+The script automatically creates an isolated virtual environment (`.venv-server`), installs dependencies, and starts the API on `0.0.0.0:8000`.
 
-On a Windows development machine:
+> **UNC paths:** the bat uses `pushd` — works even when launched from a network path `\\server\share\...`
+
+### 3. Verify it is running
+
+From any PC on the network, open in a browser:
+```
+http://<SERVER_IP>:8000/docs
+```
+If the interactive API documentation loads, the server is up. If it times out, allow port 8000 in Windows Firewall:
+```bat
+netsh advfirewall firewall add rule name="PomodoroHub" dir=in action=allow protocol=TCP localport=8000
+```
+
+---
+
+## Building the executables
+
+On the development machine (does not need to be the server):
 
 ```bat
 build_windows.bat
 ```
 
-The generated files will be:
+The script creates the `.venv-build` environment, installs all dependencies and generates:
 
-- `dist\PomodoroHubServer.exe`
-- `dist\PomodoroHubClient.exe`
+```
+dist\PomodoroHubServer.exe   ← runs on the server machine
+dist\PomodoroHubClient.exe   ← distribute to users
+```
 
-## Running the backend on the server machine
+> **Important:** rebuild `PomodoroHubClient.exe` whenever the server IP is changed in the code.
 
-On the dedicated server machine:
+---
+
+## Distributing to users
+
+Copy `dist\PomodoroHubClient.exe` to each user's PC. No Python or any other dependency needs to be installed — the exe is fully self-contained.
+
+When the app opens:
+1. The **Server** field is already pre-filled with the IP configured at build time
+2. Click **Criar conta** to register a new user
+3. **Login** with username and password
+4. Click **Iniciar Pomodoro** — the floating overlay appears on screen
+
+---
+
+## Running from source (development)
+
+To test the client without building an exe:
 
 ```bat
-dist\PomodoroHubServer.exe
+run_client.bat
 ```
 
-This starts the API on `0.0.0.0:8000`, making it accessible from other computers on the network.
-Users should connect to the server machine's LAN IP, for example `http://192.168.0.10:8000`,
-not `http://0.0.0.0:8000`.
+Creates the `.venv-client` environment and runs `python -m desktop`.
 
-If another PC cannot connect, allow `PomodoroHubServer.exe` or TCP port `8000` in Windows Firewall.
+---
 
-### Running the desktop client on user machines
+## Authentication
 
-On each user PC:
+- Passwords stored as bcrypt hashes via passlib
+- **Required pinned versions:** `passlib==1.7.4` + `bcrypt==4.0.1` — newer bcrypt versions break compatibility with passlib 1.7.4
+- Password validation: minimum 6 characters, maximum 72
 
-```bat
-dist\PomodoroHubClient.exe
-```
+---
 
-In the desktop app login screen, fill the `Servidor` field with:
+## Compatibility notes
 
-```text
-http://<SERVER_IP>:8000
-```
+| Component | Pinned version | Reason |
+|---|---|---|
+| `bcrypt` | `==4.0.1` | Versions 4.2+ are incompatible with passlib 1.7.4 |
+| `passlib` | `==1.7.4` | Last stable version with bcrypt support |
+| `pydantic` | `>=2.9.0` | Earlier versions have no wheel for Python 3.14 (requires Rust compilation) |
+| `PySide6` | `>=6.8.0` | Version 6.8.x does not support Python 3.14; pip picks a compatible version automatically |
 
-The client saves the server URL after the first login/register attempt, so the user does not
-need to type it every time.
 
-## Authentication and local persistence
-
-PomodoroHub uses a local SQLite database (`./test.db`) to store user and session data.
-
-- Users register with a username and password.
-- Passwords are never stored in plain text.
-- Password hashing is performed using `passlib` with the `bcrypt` algorithm.
-- The hashed password is saved in the `usuarios` table in the local database.
-- Login verifies the provided password against the stored bcrypt hash.
-
-This adds an extra layer of complexity and security by ensuring that
-sensitive credentials are protected even when stored locally.
-
-## How login works
-
-1. The client sends `POST /users/register` with `name` and `password`.
-2. The backend hashes the password and creates a new user record.
-3. To sign in, the client sends `POST /users/login` with the same credentials.
-4. The backend checks the username and validates the password hash.
-5. If successful, the user may start or stop Pomodoro sessions.
 
 ## Session management
 
@@ -120,4 +172,3 @@ is actively working in real time.
 
 - The backend must be reachable via network from each client machine.
 - The client uses the saved `Servidor` value, `POMODORO_HUB_API_URL`, or `--api-url` to connect to the backend.
-- Active Pomodoro sessions are visible to all running clients.

@@ -23,7 +23,7 @@ from desktop.api_client import PomodoroApiClient
 from desktop.session import get_session_end, remaining_time_text, session_end_from_data
 
 
-DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
+DEFAULT_API_BASE_URL = "http://10.20.30.228:8000"
 API_BASE_URL = os.getenv("POMODORO_HUB_API_URL", DEFAULT_API_BASE_URL)
 
 

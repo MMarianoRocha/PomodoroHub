@@ -3,7 +3,7 @@ from typing import Any
 
 import requests
 
-API_BASE_URL = os.getenv("POMODORO_HUB_API_URL", "http://127.0.0.1:8000")
+API_BASE_URL = os.getenv("POMODORO_HUB_API_URL", "http://10.20.30.228:8000")
 
 
 class PomodoroApiClient:

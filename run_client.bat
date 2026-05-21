@@ -1,13 +1,15 @@
 @echo off
 setlocal
 
-cd /d "%~dp0"
+pushd "%~dp0"
 
-if not exist ".venv\Scripts\python.exe" (
-    py -3 -m venv .venv
+if not exist ".venv-client\Scripts\python.exe" (
+    py -3 -m venv .venv-client
 )
 
-call ".venv\Scripts\activate.bat"
-python -m pip install -r requirements.txt
+call ".venv-client\Scripts\activate.bat"
+python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements-client.txt
+
+set "POMODORO_HUB_API_URL=http://10.20.30.228:8000"
 
 python -m desktop
